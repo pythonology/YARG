@@ -20,6 +20,8 @@ namespace YARG.Menu.MusicLibrary
         private InstrumentDifficultyView _instrumentDifficultyView;
         [SerializeField]
         private StarView _starView;
+        [SerializeField]
+        private TextMeshProUGUI _difficultyRatingText;
 
         [Space]
         [SerializeField]
@@ -110,6 +112,19 @@ namespace YARG.Menu.MusicLibrary
             if (starAmount is not null)
             {
                 _starView.SetStars(starAmount.Value);
+            }
+
+            // Set Ghpp difficulty rating text (only for songs)
+            if (_difficultyRatingText != null)
+            {
+                float? difficultyRating = (viewType as SongViewType)?.GetDifficultyRating();
+                bool hasRating = difficultyRating is not null;
+                _difficultyRatingText.gameObject.SetActive(hasRating);
+                if (hasRating)
+                {
+                    _difficultyRatingText.text = $"{difficultyRating.Value:F2} Difficulty";
+                    _difficultyRatingText.color = GetDifficultyRatingColor(difficultyRating.Value);
+                }
             }
 
             // Set "As Made Famous By" text
@@ -252,6 +267,38 @@ namespace YARG.Menu.MusicLibrary
                 default:
                     break;
             }
+        }
+
+        // Tiered color ramp for the Ghpp difficulty rating: easier songs trend cool/green,
+        // harder songs trend warm/red, extreme songs go purple.
+        private static Color GetDifficultyRatingColor(float rating)
+        {
+            if (rating < 2f)
+            {
+                return new Color(0.40f, 0.85f, 0.40f); // green
+            }
+
+            if (rating < 4f)
+            {
+                return new Color(0.75f, 0.90f, 0.35f); // yellow-green
+            }
+
+            if (rating < 6f)
+            {
+                return new Color(0.95f, 0.85f, 0.30f); // yellow
+            }
+
+            if (rating < 8f)
+            {
+                return new Color(0.98f, 0.62f, 0.20f); // orange
+            }
+
+            if (rating < 12f)
+            {
+                return new Color(0.95f, 0.30f, 0.30f); // red
+            }
+
+            return new Color(0.80f, 0.35f, 0.95f); // purple (extreme)
         }
 
         private void UpdateFavoriteSprite(ViewType.FavoriteInfo favoriteInfo)

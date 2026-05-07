@@ -132,6 +132,26 @@ namespace YARG.Gameplay.Player
                 or Instrument.ProBass_22Fret;
 
             TrackView.ShowPlayerName(player);
+
+            // Practice-mode difficulty visualizer. Empty GameObject parented to
+            // the per-player "Track" transform; the visualizer's own Initialize
+            // builds a Plane child and paints curves into a texture on it.
+            if (GameManager.IsPractice)
+            {
+                var trackTransform = transform.Find("Track");
+                if (trackTransform != null)
+                {
+                    // Defensive: destroy any leftover visualizer (e.g. on practice
+                    // restart) so we don't end up with stacked instances.
+                    var existing = trackTransform.Find("DifficultyVisualizer");
+                    if (existing != null) Destroy(existing.gameObject);
+
+                    var visualizerGo = new GameObject("DifficultyVisualizer");
+                    visualizerGo.transform.SetParent(trackTransform, worldPositionStays: false);
+                    var visualizer = visualizerGo.AddComponent<DifficultyVisualizer>();
+                    visualizer.Initialize(this, GameManager, chart);
+                }
+            }
         }
 
         protected override void ResetVisuals()

@@ -119,6 +119,23 @@ namespace YARG.Menu.MusicLibrary
             return _playerScoreRecord?.Stars;
         }
 
+        /// <summary>
+        /// Returns the highest Ghpp difficulty rating computed for this song across all
+        /// (instrument, difficulty) combinations, or null if none were computed.
+        /// </summary>
+        public float? GetDifficultyRating()
+        {
+            float? best = null;
+            foreach (var (_, _, rating) in SongEntry.StarRatings.Entries)
+            {
+                if (!best.HasValue || rating > best.Value)
+                {
+                    best = rating;
+                }
+            }
+            return best;
+        }
+
         public override FavoriteInfo GetFavoriteInfo()
         {
             return new FavoriteInfo
