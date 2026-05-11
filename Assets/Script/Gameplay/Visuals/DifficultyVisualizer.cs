@@ -42,12 +42,56 @@ namespace YARG.Gameplay.Visuals
         private static readonly Color StrumColor = new(0.30f, 1.00f, 0.45f, 1f);
         private static readonly Color BgColor    = new(0f, 0f, 0f, 0.55f);
 
+        // Per-chunk-shape note label backgrounds. Free notes (anchors between
+        // recognized motion chunks) render in flat gray; the four pattern shapes
+        // each get a distinct hue.
+        private static readonly Color ChunkColorFree    = new(0.45f, 0.45f, 0.45f, 0.85f);
+        private static readonly Color ChunkColorTrill   = new(0.95f, 0.30f, 0.30f, 0.85f);
+        private static readonly Color ChunkColorRollOn  = new(0.30f, 0.85f, 0.40f, 0.85f);
+        private static readonly Color ChunkColorRollOff = new(0.30f, 0.75f, 0.95f, 0.85f);
+        private static readonly Color ChunkColorZig     = new(0.95f, 0.65f, 0.20f, 0.85f);
+
         private TrackPlayer            _trackPlayer;
         private GameManager            _gameManager;
         private HighwayCameraRendering _highwayRenderer;
         private DifficultyAnalysis     _analysis;
         private List<GuitarNote>       _notes;
         private int                    _highwayIndex;
+
+        // Per-note chunk-shape lookup, sized to _notes.Count. Built once at
+        // Initialize from _analysis.FretChunks. Notes outside any chunk default
+        // to Free.
+        private DifficultyChunkShape[] _noteChunkShape;
+        // Per-note flag: true if this note is the first note of a chunk (used
+        // to draw transition lines).
+        private bool[]                 _noteIsChunkStart;
+        // Per-note flag: true if this note's chunk is part of a repeat run.
+        private bool[]                 _noteChunkInRepeat;
+        // Per-note flag: true when the note sits at its enclosing chunk's
+        // lowest fret. Sourced directly from DifficultyAnalysis.NoteIsAnchor.
+        // Anchors render in gray regardless of chunk shape.
+        private bool[]                 _noteIsAnchor;
+        // Per-note chunk index (which entry in _analysis.FretChunks contains
+        // this note). -1 for any note not covered by a chunk. Currently kept
+        // for debugging / future use; hue alternation is driven by the
+        // per-shape parity bit below.
+        private int[]                  _noteChunkIndex;
+        // Per-note alternation bit: 0 or 1, flipping each time a new chunk of
+        // the same shape appears in the chart. Drives the 2-state hue
+        // alternation so consecutive same-shape chunks read as "same pattern,
+        // different occurrence" rather than as a flat block of one color or a
+        // random sprinkle.
+        private byte[]                 _noteShapePhase;
+        // Reverse lookup keyed by note Tick (uint) so external callers can
+        // resolve a chart note → its chunk index in O(1). We *cannot* key by
+        // reference: FiveFretGuitarPlayer.GetNotes calls
+        // <c>chart.GetFiveFretTrack(...).Clone()</c>, so every spawned note is
+        // a deep copy of the chart instance the visualizer holds. Tick is
+        // preserved through Clone, unique per chord parent, and shared with
+        // all chord-child notes (chord members are simultaneous), so it
+        // identifies a chunk slot reliably regardless of which clone instance
+        // shows up at PaintNote/UpdateColor time.
+        private Dictionary<uint, int> _noteIndexByTick;
 
         // Per-channel song-wide max for bar normalization.
         private float _fretMax;
@@ -61,6 +105,8 @@ namespace YARG.Gameplay.Visuals
         private Texture2D _texFret;
         private Texture2D _texStrum;
         private Texture2D _texBg;
+        // Per-chunk-shape label backgrounds, indexed by (int)DifficultyChunkShape.
+        private Texture2D[] _texChunkShape;
         private GUIStyle  _labelStyle;
         private GUIStyle  _smallLabelStyle;
 
@@ -74,15 +120,15 @@ namespace YARG.Gameplay.Visuals
             _gameManager  = gameManager;
             _highwayIndex = trackPlayer.HighwayIndex;
 
-            // HighwayCameraRendering lives on the per-player Camera child. Use
-            // includeInactive so we still find it if the Camera is disabled at
-            // some point in init order. Search from the BaseVisual root so we
-            // pick up the right player's renderer in multiplayer.
-            _highwayRenderer = trackPlayer.GetComponentInChildren<HighwayCameraRendering>(includeInactive: true);
+            // The TrackPlayer exposes the renderer directly via a public
+            // accessor. Falling back to GetComponentInChildren if for some
+            // reason the inspector reference isn't wired (older scenes, etc.).
+            _highwayRenderer = trackPlayer.HighwayRenderer
+                ?? trackPlayer.GetComponentInChildren<HighwayCameraRendering>(includeInactive: true);
             if (_highwayRenderer == null)
             {
                 YARG.Core.Logging.YargLogger.LogWarning(
-                    "DifficultyVisualizer: HighwayCameraRendering not found — per-note labels and bar-anchored positioning will fall back.");
+                    "DifficultyVisualizer: HighwayCameraRendering not found — per-note labels and chunk-transition lines will fall back.");
             }
 
             var profile = trackPlayer.Player.Profile;
@@ -108,6 +154,189 @@ namespace YARG.Gameplay.Visuals
 
             _fretMax  = ChannelMax(_analysis.Fret.Values);
             _strumMax = ChannelMax(_analysis.Strum.Values);
+
+            BuildChunkLookup();
+        }
+
+        // Materialize the per-note chunk metadata into flat arrays keyed by
+        // note index, so the per-frame draw loop is a O(1) lookup instead of
+        // a chunk-list scan. The Ghpp converter is order-preserving, so chunk
+        // indices map 1-1 onto _notes.
+        private void BuildChunkLookup()
+        {
+            int n = _notes.Count;
+            _noteChunkShape    = new DifficultyChunkShape[n];
+            _noteIsChunkStart  = new bool[n];
+            _noteChunkInRepeat = new bool[n];
+            _noteIsAnchor      = new bool[n];
+            _noteChunkIndex    = new int[n];
+            _noteShapePhase    = new byte[n];
+            _noteIndexByTick   = new Dictionary<uint, int>(n);
+
+            // Source the per-note anchor mask from the analysis. Length should
+            // equal _notes.Count; if not we treat anything past the mask as
+            // non-anchor (safe — pattern color path still applies).
+            var anchorMask = _analysis.NoteIsAnchor;
+            int anchorMaskLen = anchorMask?.Count ?? 0;
+
+            // Default shape is Free for any note not covered by a chunk. We
+            // only need to record the parent's tick — chord children share the
+            // same tick, so any sibling that arrives at lookup time still
+            // resolves correctly.
+            for (int i = 0; i < n; i++)
+            {
+                _noteChunkShape[i] = DifficultyChunkShape.Free;
+                _noteChunkIndex[i] = -1;
+                _noteIsAnchor[i]   = i < anchorMaskLen && anchorMask[i];
+                _noteIndexByTick[_notes[i].Tick] = i;
+            }
+
+            var chunks = _analysis.FretChunks;
+
+            // Per-shape occurrence counter, indexed by (int)DifficultyChunkShape.
+            // Each new chunk of a given shape increments its counter; the LSB
+            // becomes the chunk's alternation phase (0 or 1).
+            var perShapeOccurrences = new int[8];
+
+            if (chunks != null)
+            {
+                for (int c = 0; c < chunks.Count; c++)
+                {
+                    var chunk = chunks[c];
+                    int start = chunk.StartNoteIndex;
+                    int end   = chunk.EndNoteIndex;
+                    if (start < 0 || end >= n || start > end) continue;
+
+                    int shapeIdx = (int) chunk.Shape;
+                    byte phase = (byte) (perShapeOccurrences[shapeIdx] & 1);
+                    perShapeOccurrences[shapeIdx]++;
+
+                    for (int j = start; j <= end; j++)
+                    {
+                        _noteChunkShape[j]    = chunk.Shape;
+                        _noteChunkInRepeat[j] = chunk.InRepeat;
+                        _noteChunkIndex[j]    = c;
+                        _noteShapePhase[j]    = phase;
+                    }
+                    _noteIsChunkStart[start] = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Build a list of synthetic Beatlines positioned at the start time of
+        /// every chunk that marks a real pattern transition. The intent is to
+        /// inject these into the host TrackPlayer's beatline list so the
+        /// existing <c>BeatlineElement</c> pool/pipeline renders them as
+        /// bright vertical lines on the highway — same code path that draws
+        /// measure bars, nothing custom.
+        ///
+        /// A chunk is treated as a transition only when:
+        ///   - it has a recognized motion shape (Trill/RollOn/RollOff/Zig);
+        ///     Free and Held chunks aren't patterns, so they don't transition.
+        ///   - it is NOT part of an ongoing K-period repeat — i.e. repeating
+        ///     the same Zig four times only emits ONE transition line at the
+        ///     first Zig, not four. The K-period detector inside the GHPP
+        ///     chunker tags chunks past the first repeat occurrence with
+        ///     InRepeat=true.
+        /// </summary>
+        public List<Beatline> BuildChunkTransitionBeatlines()
+        {
+            var result = new List<Beatline>();
+            if (_analysis == null || _notes == null) return result;
+
+            var chunks = _analysis.FretChunks;
+            if (chunks == null) return result;
+
+            for (int c = 0; c < chunks.Count; c++)
+            {
+                var chunk = chunks[c];
+                if (chunk.Shape == DifficultyChunkShape.Free) continue;
+                if (chunk.Shape == DifficultyChunkShape.Held) continue;
+                if (chunk.InRepeat) continue;
+
+                int idx = chunk.StartNoteIndex;
+                if (idx < 0 || idx >= _notes.Count) continue;
+
+                var note = _notes[idx];
+                // Use BeatlineType.Measure so the line gets the brightest /
+                // tallest visual treatment from BeatlineElement (yScale=0.07,
+                // alpha=0.6) — matches what the user asked for.
+                result.Add(new Beatline(BeatlineType.Measure, note.Time, note.Tick));
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Resolve a chart note to the color of its enclosing fret-chunk shape.
+        /// Returns false if the visualizer hasn't initialized chunk data, or if
+        /// the supplied note isn't part of this player's chart (e.g. wrong
+        /// player in multiplayer). Free chunks (notes that fall between
+        /// recognized motion patterns) return the gray "anchor" color.
+        /// </summary>
+        public bool TryGetChunkColor(GuitarNote note, out Color color)
+        {
+            color = default;
+            if (note == null || _noteIndexByTick == null) return false;
+            if (!_noteIndexByTick.TryGetValue(note.Tick, out int idx)) return false;
+
+            // Anchor notes (lowest fret in their chunk) always render gray
+            // regardless of the enclosing chunk's shape — they're the
+            // structural pivot of the motion, not the colored "target" notes.
+            // This includes 1-note Free chunks: the single isolated note is
+            // its own anchor, so it stays gray.
+            if (_noteIsAnchor[idx])
+            {
+                var anchor = ChunkColorFree;
+                anchor.a = 1f;
+                color = anchor;
+                return true;
+            }
+
+            // Non-anchor notes get the chunk-shape color, alternating between
+            // two hues per consecutive same-shape chunk. The shape constants
+            // are tuned for translucent OnGUI label backgrounds (alpha 0.85);
+            // SetColorWithEmission treats alpha as a body multiplier on the
+            // highway, so we force alpha 1 here.
+            var baseColor = ColorForShape(_noteChunkShape[idx]);
+            baseColor.a = 1f;
+            color = _noteShapePhase[idx] == 0 ? baseColor : PerturbHue(baseColor);
+            return true;
+        }
+
+        /// <summary>
+        /// Returns the "alternate" variant of the given shape's base color.
+        /// Used by every odd-occurrence chunk of a given shape so consecutive
+        /// same-shape chunks form a deterministic A/B/A/B pattern rather than
+        /// a flat block of one color or a random sprinkle of variants.
+        /// </summary>
+        private static Color PerturbHue(Color baseColor)
+        {
+            Color.RGBToHSV(baseColor, out float h, out float s, out float v);
+            // ~+15° hue shift on the unit circle (+0.04 of 1.0). Big enough
+            // to read as distinct, small enough that a Trill still reads as
+            // the Trill color.
+            h = Mathf.Repeat(h + 0.04f, 1f);
+            // Slight value bump so the alternate variant doesn't just look
+            // like a duller version — gives it a clearly "different" feel.
+            v = Mathf.Clamp01(v * 0.88f);
+
+            var result = Color.HSVToRGB(h, s, v);
+            result.a = baseColor.a;
+            return result;
+        }
+
+        private static Color ColorForShape(DifficultyChunkShape shape)
+        {
+            switch (shape)
+            {
+                case DifficultyChunkShape.Trill:   return ChunkColorTrill;
+                case DifficultyChunkShape.RollOn:  return ChunkColorRollOn;
+                case DifficultyChunkShape.RollOff: return ChunkColorRollOff;
+                case DifficultyChunkShape.Zig:     return ChunkColorZig;
+                default:                           return ChunkColorFree;
+            }
         }
 
         private static float ChannelMax(float[] values)
@@ -127,6 +356,15 @@ namespace YARG.Gameplay.Visuals
             _texFret  = MakeTex(FretColor);
             _texStrum = MakeTex(StrumColor);
             _texBg    = MakeTex(BgColor);
+
+            // One swatch per DifficultyChunkShape value, ordered to match the
+            // enum so we can index by (int)shape.
+            _texChunkShape = new Texture2D[5];
+            _texChunkShape[(int) DifficultyChunkShape.Free]    = MakeTex(ChunkColorFree);
+            _texChunkShape[(int) DifficultyChunkShape.Trill]   = MakeTex(ChunkColorTrill);
+            _texChunkShape[(int) DifficultyChunkShape.RollOn]  = MakeTex(ChunkColorRollOn);
+            _texChunkShape[(int) DifficultyChunkShape.RollOff] = MakeTex(ChunkColorRollOff);
+            _texChunkShape[(int) DifficultyChunkShape.Zig]     = MakeTex(ChunkColorZig);
 
             _labelStyle = new GUIStyle(GUI.skin.label)
             {
@@ -267,9 +505,10 @@ namespace YARG.Gameplay.Visuals
                     ? 0.2f * note.Fret + 0.1f   // matches TrackElement.GetElementX(fret,5)
                     : 0.5f;                     // open / wildcard → center
                 float yNorm = (float) (dt * ns / zRange);
+                float yClamped = Mathf.Clamp01(yNorm);
 
                 var screen = _highwayRenderer.GetTrackPositionScreenSpace(
-                    _highwayIndex, xNorm, Mathf.Clamp01(yNorm));
+                    _highwayIndex, xNorm, yClamped);
                 if (screen == null) continue;
 
                 // Look up complexity values at this note's time.
@@ -284,7 +523,14 @@ namespace YARG.Gameplay.Visuals
                 float guiX = screen.Value.x - NOTE_LABEL_W * 0.5f;
                 float guiY = screen.Value.y - NOTE_LABEL_Y_OFFSET_PX - NOTE_LABEL_H;
 
-                GUI.DrawTexture(new Rect(guiX, guiY, NOTE_LABEL_W, NOTE_LABEL_H), _texBg);
+                // Pick the label background by chunk shape — gray for Free
+                // (anchor) notes, distinct hue per pattern shape.
+                var shape = (i < _noteChunkShape.Length)
+                    ? _noteChunkShape[i]
+                    : DifficultyChunkShape.Free;
+                var swatch = _texChunkShape[(int) shape];
+
+                GUI.DrawTexture(new Rect(guiX, guiY, NOTE_LABEL_W, NOTE_LABEL_H), swatch);
                 GUI.Label(
                     new Rect(guiX, guiY, NOTE_LABEL_W, NOTE_LABEL_H),
                     $"F {fretVal:F1}\nS {strumVal:F1}",
@@ -303,6 +549,14 @@ namespace YARG.Gameplay.Visuals
             if (_texFret  != null) Destroy(_texFret);
             if (_texStrum != null) Destroy(_texStrum);
             if (_texBg    != null) Destroy(_texBg);
+
+            if (_texChunkShape != null)
+            {
+                for (int i = 0; i < _texChunkShape.Length; i++)
+                {
+                    if (_texChunkShape[i] != null) Destroy(_texChunkShape[i]);
+                }
+            }
         }
     }
 }

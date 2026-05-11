@@ -41,6 +41,10 @@ namespace YARG.Gameplay.Player
         protected CameraPositioner CameraPositioner;
         [SerializeField]
         protected HighwayCameraRendering HighwayCameraRendering;
+        // Read-only accessor so the practice-mode visualizer can project
+        // chunk-transition lines through the same camera the highway uses
+        // without having to find the component reflectively.
+        public HighwayCameraRendering HighwayRenderer => HighwayCameraRendering;
         [SerializeField]
         protected TrackMaterial TrackMaterial;
         [SerializeField]
@@ -69,6 +73,14 @@ namespace YARG.Gameplay.Player
 
         public float ZeroFadePosition { get; private set; }
         public float FadeSize         { get; private set; }
+
+        /// <summary>
+        /// Practice-mode chunk visualizer. Non-null only when running in practice
+        /// mode AND a 5-fret instrument that has GHPP analysis available. Note
+        /// elements consult this in <c>UpdateColor</c> to override their fret
+        /// color with a per-chunk classification color.
+        /// </summary>
+        public DifficultyVisualizer DifficultyVisualizer { get; private set; }
 
         [field: Header("Star Power Trim Effect")]
         [SerializeField]
@@ -150,6 +162,24 @@ namespace YARG.Gameplay.Player
                     visualizerGo.transform.SetParent(trackTransform, worldPositionStays: false);
                     var visualizer = visualizerGo.AddComponent<DifficultyVisualizer>();
                     visualizer.Initialize(this, GameManager, chart);
+                    DifficultyVisualizer = visualizer;
+
+                    // Inject synthetic Beatlines at every chunk transition so
+                    // the existing beatline pool/spawn pipeline (UpdateBeatlines
+                    // -> BeatlinePool -> BeatlineElement) draws bright vertical
+                    // lines on the highway with no parallel render path.
+                    var transitionLines = visualizer.BuildChunkTransitionBeatlines();
+                    if (transitionLines.Count > 0)
+                    {
+                        // Don't mutate SyncTrack.Beatlines (shared chart state).
+                        // Build a new player-local merged list, sorted by time
+                        // so UpdateBeatlines' single-cursor walk stays valid.
+                        var merged = new List<Beatline>(Beatlines.Count + transitionLines.Count);
+                        merged.AddRange(Beatlines);
+                        merged.AddRange(transitionLines);
+                        merged.Sort((a, b) => a.Time.CompareTo(b.Time));
+                        Beatlines = merged;
+                    }
                 }
             }
         }

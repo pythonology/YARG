@@ -181,7 +181,8 @@ namespace YARG.Gameplay.Visuals
         {
             var colors = Player.Player.ColorProfile.FiveFretGuitar;
 
-            // Get which note color to use
+            // Standard fret color (used for sustain line always; used for the
+            // body/metal too when no visualizer is active).
             var colorNoStarPower = colors.GetNoteColor(NoteRef.Fret);
             var color = IsStarPowerVisible
                 ? colors.GetNoteStarPowerColor(NoteRef.Fret)
@@ -192,13 +193,28 @@ namespace YARG.Gameplay.Visuals
                 color = colors.Miss;
             }
 
+            // Hijack the existing color-set path: when the practice-mode
+            // difficulty visualizer is active and resolves a chunk color for
+            // this note, replace the body/no-starpower/metal colors with that
+            // chunk color before feeding it through the same SetColorWithEmission
+            // / SetMetalColor calls the engine has always used.
+            var bodyColor    = color.ToUnityColor();
+            var bodyColorNsp = colorNoStarPower.ToUnityColor();
+            var metalColor   = colors.GetMetalColor(IsStarPowerVisible).ToUnityColor();
+
+            if (Player.DifficultyVisualizer != null
+                && Player.DifficultyVisualizer.TryGetChunkColor(NoteRef, out var chunkColor))
+            {
+                bodyColor    = chunkColor;
+                bodyColorNsp = chunkColor;
+                metalColor   = chunkColor;
+            }
+
             // Set the note color if not hidden
             if (!NoteRef.WasHit)
             {
-                NoteGroup.SetColorWithEmission(color.ToUnityColor(), colorNoStarPower.ToUnityColor());
-
-                // Set the metal color
-                NoteGroup.SetMetalColor(colors.GetMetalColor(IsStarPowerVisible).ToUnityColor());
+                NoteGroup.SetColorWithEmission(bodyColor, bodyColorNsp);
+                NoteGroup.SetMetalColor(metalColor);
             }
 
             // The rest of this method is for sustain only

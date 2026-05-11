@@ -63551,6 +63551,22 @@ PrefabInstance:
       propertyPath: m_Name
       value: Open
       objectReference: {fileID: 0}
+    - target: {fileID: 4132597056536066752, guid: 646e582c8d8303248aa9d4bd931b2081, type: 3}
+      propertyPath: m_Mesh
+      value: 
+      objectReference: {fileID: -8489023414325586492, guid: fc442e9781fed994aa49bce06716c72d, type: 3}
+    - target: {fileID: 5312122841397978341, guid: 646e582c8d8303248aa9d4bd931b2081, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 7.6766
+      objectReference: {fileID: 0}
+    - target: {fileID: 5312122841397978341, guid: 646e582c8d8303248aa9d4bd931b2081, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 7.164681
+      objectReference: {fileID: 0}
+    - target: {fileID: 5312122841397978341, guid: 646e582c8d8303248aa9d4bd931b2081, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 5.1742253
+      objectReference: {fileID: 0}
     - target: {fileID: 7137662299531785058, guid: 646e582c8d8303248aa9d4bd931b2081, type: 3}
       propertyPath: m_RootOrder
       value: 0
@@ -64120,6 +64136,22 @@ PrefabInstance:
     - target: {fileID: 813959795042240314, guid: 9d72c5330e79c7440b60de8f2fc35fc1, type: 3}
       propertyPath: m_Name
       value: OpenHOPO
+      objectReference: {fileID: 0}
+    - target: {fileID: 4132597056536066752, guid: 9d72c5330e79c7440b60de8f2fc35fc1, type: 3}
+      propertyPath: m_Mesh
+      value: 
+      objectReference: {fileID: -8489023414325586492, guid: fc442e9781fed994aa49bce06716c72d, type: 3}
+    - target: {fileID: 5312122841397978341, guid: 9d72c5330e79c7440b60de8f2fc35fc1, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 7.6766
+      objectReference: {fileID: 0}
+    - target: {fileID: 5312122841397978341, guid: 9d72c5330e79c7440b60de8f2fc35fc1, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 7.164681
+      objectReference: {fileID: 0}
+    - target: {fileID: 5312122841397978341, guid: 9d72c5330e79c7440b60de8f2fc35fc1, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 5.1742253
       objectReference: {fileID: 0}
     - target: {fileID: 7137662299531785058, guid: 9d72c5330e79c7440b60de8f2fc35fc1, type: 3}
       propertyPath: m_RootOrder
