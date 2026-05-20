@@ -349,7 +349,12 @@ namespace YARG.Menu.MusicLibrary
                 setListNotEmpty ?
                     new NavigationScheme.Entry(MenuAction.Yellow, "Menu.MusicLibrary.StartSet", StartSetlist) :
                     new NavigationScheme.Entry(MenuAction.Yellow, "Menu.MusicLibrary.PlayShow", EnterShowMode),
-                new NavigationScheme.Entry(MenuAction.Blue, "Menu.MusicLibrary.Filters", OpenFilters),
+                new NavigationScheme.Entry(
+                    MenuAction.Blue,
+                    "Menu.MusicLibrary.Filters",
+                    OpenFilters,
+                    holdSeconds: GREEN_HOLD_SECONDS,
+                    onHoldHandler: OnBlueHold),
                 new NavigationScheme.Entry(MenuAction.Orange, "Menu.MusicLibrary.MoreOptions",
                     OnOrangeHit, OnOrangeRelease),
             }, false));
@@ -889,6 +894,11 @@ namespace YARG.Menu.MusicLibrary
         private void OnGreenHold(NavigationContext _)
         {
             ExecuteGreenHoldAction();
+        }
+
+        private void OnBlueHold()
+        {
+            _sidebar.ToggleLeaderboard();
         }
 
         public void ExecuteGreenHoldAction()

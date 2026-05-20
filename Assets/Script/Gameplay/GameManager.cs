@@ -640,7 +640,7 @@ namespace YARG.Gameplay
 
         private void RecordScores(ReplayInfo replayInfo)
         {
-            if (!ScoreContainer.IsBandScoreValid(SongSpeed))
+            if (!ScoreContainer.IsBandScoreValid())
             {
                 return;
             }
@@ -653,7 +653,7 @@ namespace YARG.Gameplay
                 var profile = player.Player.Profile;
 
                 // Skip bots and anyone that's obviously cheating.
-                if (!ScoreContainer.IsSoloScoreValid(SongSpeed, player.Player))
+                if (!ScoreContainer.IsSoloScoreValid(player.Player))
                 {
                     continue;
                 }
@@ -675,13 +675,15 @@ namespace YARG.Gameplay
                     IsFc = player.IsFc,
                     IsReplay = player.Player.IsReplay,
 
-                    Percent = player.BaseStats.Percent
+                    Percent = player.BaseStats.Percent,
+
+                    Modifiers = profile.CurrentModifiers,
                 });
 
                 starScoreCutoffsList.Add(player.BaseEngine.StarScoreThresholds);
             }
 
-            var validScoreCount = _players.Count(p => ScoreContainer.IsSoloScoreValid(SongSpeed, p.Player));
+            var validScoreCount = _players.Count(p => ScoreContainer.IsSoloScoreValid(p.Player));
             if (validScoreCount == 0)
             {
                 return;

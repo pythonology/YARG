@@ -140,7 +140,7 @@ namespace YARG.Menu.ScoreScreen
             _bandScoreNotSavedPill.SetValues(scoreNotSavedText,
                 ColoredPillElement.ColoredPillPreset.HarderModifier);
             _bandScoreNotSavedPill.gameObject.SetActive(
-                !ScoreContainer.IsBandScoreValid(PersistentState.Default.SongSpeed));
+                !ScoreContainer.IsBandScoreValid());
 
             // Set speed text (if not at 100% speed)
             if (!Mathf.Approximately(GlobalVariables.State.SongSpeed, 1f))

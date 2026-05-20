@@ -40,6 +40,12 @@ namespace YARG.Scores
         /// </remarks>
         public float? Percent { get; set; }
 
+        /// <remarks>
+        /// Nullable so rows written before this column existed read back as null
+        /// (i.e. "modifiers weren't recorded for this play") rather than Modifier.None.
+        /// </remarks>
+        public Modifier? Modifiers { get; set; }
+
         public float GetPercent()
         {
             return Percent

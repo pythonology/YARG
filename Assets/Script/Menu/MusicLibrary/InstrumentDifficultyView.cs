@@ -27,8 +27,9 @@ namespace YARG.Menu.MusicLibrary
         public void SetInfo(ViewType.ScoreInfo scoreInfo)
         {
             // Set width
+            var showPercentDecimals = SettingsManager.Settings?.ShowPercentDecimals.Value ?? false;
             var rect = GetComponent<RectTransform>();
-            var length = SettingsManager.Settings.ShowPercentDecimals.Value ? 150 : 130;
+            var length = showPercentDecimals ? 150 : 130;
             GetComponent<RectTransform>().sizeDelta = new Vector2(length, rect.sizeDelta.y);
 
             // Set instrument icon
@@ -38,7 +39,7 @@ namespace YARG.Menu.MusicLibrary
             _difficultyIcon.sprite = GetSprite($"DifficultyIcons[{scoreInfo.Difficulty.ToString()}]");
 
             // Set percent value
-            if (SettingsManager.Settings.ShowPercentDecimals.Value)
+            if (showPercentDecimals)
             {
                 var percent = Mathf.Floor(scoreInfo.Percent * 1000f) / 10f;
                 _percentText.text = $"{percent:0.0}%";

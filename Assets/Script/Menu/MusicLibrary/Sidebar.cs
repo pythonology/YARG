@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using TMPro;
@@ -13,6 +14,8 @@ using YARG.Core.Utility;
 using YARG.Helpers.Extensions;
 using YARG.Menu.Navigation;
 using YARG.Menu.Persistent;
+using YARG.Player;
+using YARG.Scores;
 using YARG.Song;
 using static System.Globalization.CultureInfo;
 
@@ -56,6 +59,10 @@ namespace YARG.Menu.MusicLibrary
 
         [SerializeField]
         private GameObject _sidebarContents;
+        [SerializeField]
+        private GameObject _songOverview;
+        [SerializeField]
+        private SongLeaderboard _leaderboard;
         [SerializeField]
         private GameObject _difficultiesDisplay;
         [SerializeField]
@@ -140,22 +147,62 @@ namespace YARG.Menu.MusicLibrary
             }
         }
 
-        public void UpdateSidebar(bool force = false)
+        public bool IsLeaderboardVisible { get; private set; }
+
+        public void ToggleLeaderboard()
         {
-            if (_musicLibraryMenu.ViewList.Count <= 0)
+            if (IsLeaderboardVisible) HideLeaderboard();
+            else ShowLeaderboard();
+        }
+
+        public void ShowLeaderboard()
+        {
+            if (_currentView is not SongViewType song) return;
+            IsLeaderboardVisible = true;
+            _songOverview.SetActive(false);
+            _leaderboard.gameObject.SetActive(true);
+            PopulateLeaderboard(song.SongEntry);
+        }
+
+        public void HideLeaderboard()
+        {
+            if (!IsLeaderboardVisible) return;
+            IsLeaderboardVisible = false;
+            _leaderboard.Clear();
+            _leaderboard.gameObject.SetActive(false);
+            _songOverview.SetActive(true);
+        }
+
+        private void PopulateLeaderboard(SongEntry song)
+        {
+            var player = PlayerContainer.Players.FirstOrDefault(p => !p.Profile.IsBot);
+            if (player == null)
             {
+                _leaderboard.Show(Array.Empty<SongLeaderboardEntry>());
                 return;
             }
 
-            var selected = _musicLibraryMenu.CurrentSelection;
-            if (!force && _currentView != null && _currentView == selected)
-                return;
+            var entries = ScoreContainer.GetAllPlayerSongScores(
+                song.Hash, player.Profile.Id, player.Profile.CurrentInstrument);
+            _leaderboard.Show(entries);
+        }
 
-            _currentView = selected;
+        private void UpdateLeaderboardView()
+        {
+            switch (_currentView)
+            {
+                case SongViewType songViewType:
+                    PopulateLeaderboard(songViewType.SongEntry);
+                    break;
+                default:
+                    HideLeaderboard();
+                    break;
+            }
+        }
 
-            CancelAlbumLoad();
-
-            switch (selected)
+        private void UpdateSongView()
+        {
+            switch (_currentView)
             {
                 case SongViewType songViewType:
                     ShowSongInfo(songViewType);
@@ -174,6 +221,32 @@ namespace YARG.Menu.MusicLibrary
             }
 
             UpdatePlayButtonLabel(_musicLibraryMenu.ShowPlaylist.Count > 0);
+        }
+
+        public void UpdateSidebar(bool force = false)
+        {
+            if (_musicLibraryMenu.ViewList.Count <= 0)
+            {
+                return;
+            }
+
+            var selected = _musicLibraryMenu.CurrentSelection;
+            if (!force && _currentView != null && _currentView == selected)
+                return;
+
+            _currentView = selected;
+
+            CancelAlbumLoad();
+
+            if (IsLeaderboardVisible)
+            {
+                UpdateLeaderboardView();
+            }
+            else
+            {
+                UpdateSongView();
+            }
+
             RefreshFavoriteState();
         }
 
@@ -195,6 +268,7 @@ namespace YARG.Menu.MusicLibrary
 
         private void ClearSidebar()
         {
+            HideLeaderboard();
             ClearAlbumCoverTextures();
             _album.text = string.Empty;
 

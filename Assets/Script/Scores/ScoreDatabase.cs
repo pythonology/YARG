@@ -57,6 +57,26 @@ namespace YARG.Scores
     }
 
     /// <summary>
+    /// Slim row for the per-song leaderboard view — only the fields the leaderboard row needs.
+    /// </summary>
+    public record SongLeaderboardEntry
+    {
+        public Guid       PlayerId       { get; set; }
+        public Guid       EnginePresetId { get; set; }
+        public int        Score          { get; set; }
+        public float?     Percent        { get; set; }
+        public int        NotesHit       { get; set; }
+        public int        NotesMissed    { get; set; }
+        public Difficulty Difficulty     { get; set; }
+        public Instrument Instrument     { get; set; }
+        public bool       IsFc           { get; set; }
+        public Modifier?  Modifiers      { get; set; }
+        public float      SongSpeed      { get; set; }
+
+        public float GetPercent() => Percent ?? (float) NotesHit / (NotesHit + NotesMissed);
+    }
+
+    /// <summary>
     /// The score database.
     /// </summary>
     /// <remarks>
@@ -342,6 +362,29 @@ namespace YARG.Scores
                 (int) instrument
             );
             return result;
+        }
+
+        public List<SongLeaderboardEntry> QueryPlayerSongLeaderboard(
+            HashWrapper songChecksum,
+            Guid playerId,
+            Instrument instrument
+        )
+        {
+            return Query<SongLeaderboardEntry>(
+                @"SELECT ps.PlayerId, ps.EnginePresetId, ps.Score, ps.Percent,
+                         ps.NotesHit, ps.NotesMissed, ps.Difficulty, ps.Instrument,
+                         ps.IsFc, ps.Modifiers, gr.SongSpeed
+                FROM PlayerScores ps
+                INNER JOIN GameRecords gr ON ps.GameRecordId = gr.Id
+                WHERE gr.SongChecksum = ?
+                    AND ps.PlayerId = ?
+                    AND ps.Instrument = ?
+                    AND ps.IsReplay = 0
+                ORDER BY ps.Score DESC",
+                songChecksum.HashBytes,
+                playerId,
+                (int) instrument
+            );
         }
 
         public PlayerScoreRecord QueryPlayerSongHighScore(

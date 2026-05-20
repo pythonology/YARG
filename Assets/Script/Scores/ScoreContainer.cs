@@ -87,13 +87,13 @@ namespace YARG.Scores
             }
         }
 
-        public static bool IsBandScoreValid(float songSpeed)
+        public static bool IsBandScoreValid()
         {
             var activePlayers = PlayerContainer.Players.Where(p => !p.SittingOut).ToList();
             var humans = activePlayers.Where(p => !p.Profile.IsBot).ToList();
             var hasBots = activePlayers.Count > humans.Count;
             var hasHumans = humans.Count > 0;
-            var allHumanScoresValid = hasHumans && humans.All(player => IsSoloScoreValid(songSpeed, player));
+            var allHumanScoresValid = hasHumans && humans.All(player => IsSoloScoreValid(player));
 
             if (!allHumanScoresValid)
             {
@@ -107,15 +107,11 @@ namespace YARG.Scores
 
             return true;
         }
+            
 
-        public static bool IsSoloScoreValid(float songSpeed, YargPlayer player)
+        public static bool IsSoloScoreValid(YargPlayer player)
         {
-            if (songSpeed < 1.0f || player.Profile.IsBot || !player.IsScoreValid)
-            {
-                return false;
-            }
-
-            return true;
+            return !(player.Profile.IsBot || !player.IsScoreValid);
         }
 
         public static void RecordScore(GameRecord gameRecord, List<PlayerScoreRecord> playerEntries)
@@ -248,6 +244,25 @@ namespace YARG.Scores
         public static GameRecord GetBandHighScore(HashWrapper songChecksum)
         {
             return BandHighScores.GetValueOrDefault(songChecksum);
+        }
+
+        /// <summary>
+        /// Get every recorded play for the given song + player + instrument (across difficulties),
+        /// projected to the slim leaderboard row used by the music library sidebar.
+        /// Replays are excluded.
+        /// </summary>
+        public static List<SongLeaderboardEntry> GetAllPlayerSongScores(
+            HashWrapper songChecksum, Guid playerId, Instrument instrument)
+        {
+            try
+            {
+                return _db.QueryPlayerSongLeaderboard(songChecksum, playerId, instrument);
+            }
+            catch (Exception e)
+            {
+                YargLogger.LogException(e, "Failed to load song leaderboard scores.");
+                return new List<SongLeaderboardEntry>();
+            }
         }
 
         private static PlayerScoreRecord GetHighScoreFromDatabase(HashWrapper songChecksum, Guid playerId, Instrument instrument)
