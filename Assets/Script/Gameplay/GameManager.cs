@@ -769,6 +769,17 @@ namespace YARG.Gameplay
                 }).ToArray(),
                 BandScore = BandScore,
                 BandStars = (int) BandStars,
+
+                // TODO: When online comes out, change
+                // .Where(player => !player.Player.Profile.IsBot)
+                // to:
+                // .Where(player => !(player.Player.Profile.IsBot || player.Player.IsRemote))
+                MeanAverageOffset = _players
+                    .Where(player => !player.Player.Profile.IsBot)
+                    .Select(player => player.BaseStats.GetAverageOffset())
+                    .DefaultIfEmpty(0)
+                    .Average(),
+
                 ReplayInfo = replayInfo,
             };
 

@@ -479,7 +479,7 @@
                     "RandomSong": "Random Song",
                     "BackToTop": "Back to Top",
                     "ScanSongs": "Scan Songs",
-                    "SortBy": "Sort By: {0}",
+                    "SortBy": "Sort By...",
                     "GoToSection": "Go To Section...",
                     "AddToFavorites": "Add To Favorites",
                     "RemoveFromFavorites": "Remove From Favorites",
@@ -655,7 +655,9 @@
             "RestartSong" : "Restart Song",
             "ShowAdvanced": "Show Advanced",
             "HideAdvanced": "Hide Advanced",
-            "EndSetlistEarly" : "End Setlist"
+            "EndSetlistEarly" : "End Setlist",
+            "AddSongOffset": "(Hold) Record song offset",
+            "RemoveSongOffset": "(Hold) Undo offset record"
         },
         "Settings": {
             "ShowAdvanced": "Show Advanced",
@@ -741,7 +743,49 @@
 			"4LaneHeader": "4-Lane Drums Highway Configuration",
 			"ProHeader": "Pro Drums Highway Configuration",
 			"5LaneHeader": "5-Lane Drums Highway Configuration"
-		}
+		},
+        "Pause": {
+            "Generic": {
+                "Resume": "Resume",
+                "Restart": "Restart",
+                "BackToLibrary": "Back To Library",
+                "Settings": "Settings",
+                "Practice": "Practice"
+            },
+            "Fail": {
+                "EnableNoFailandResume": "Enable No Fail and Resume",
+                "EnableNoFailandRestart": "Enable No Fail and Restart"
+            },
+            "Practice": {
+                "SetAPosition": "Set A Position",
+                "SetBPosition": "Set B Position",
+                "ClearAB": "Clear A/B",
+                "SelectNewSections": "Select New Sections",
+                "Quickplay": "Quickplay"
+            },
+            "Quickplay": {
+                "SaveReplay": "Save Replay"
+            },
+            "Replay": {
+                "SaveColorProfile": "Save Color Profile"
+            },
+            "Setlist": {
+                "Skip": "Skip"
+            },
+            "QuickSettings": {
+                "AudioSettings": "Audio Settings",
+                "EditHud": "Edit HUD",
+                "NoFail": {
+                    "Enable": "Enable No Fail",
+                    "Disable": "Disable No Fail"
+                },
+                "VenuePP": {
+                    "Enable": "Enable Venue Post Processing",
+                    "Disable": "Disable Venue Post Processing"
+                },
+                "Calibration": "Calibration Settings"
+            }
+        }
     },
     "Gameplay": {
         "Notifications": {
@@ -1661,6 +1705,18 @@
                 "Name": "Auto Calibrate Video",
                 "PauseName": "Auto Calibrate Video",
                 "Description": "Placeholder setting. Currently has no effect."
+            },
+            "ShowSongOffsetCalibration": {
+                "Name": "Show Mean Song Offset Calibration",
+                "Description": "Shows an option on the advanced stats screen to record mean song offset."
+            },
+            "ShowSongOffsetCalibrationOnlyOnePlayer": {
+                "Name": "Only Show With One Player",
+                "Description": "Only shows the option to record mean song offset when there is one human player."
+            },
+            "UseSongOffsetCalibration": {
+                "Name": "Use Mean Song Offset Calibration",
+                "Description": "Use the recorded song mean offset to adjust song audio delay."
             },
             "VocalMonitoring": {
                 "Name": "Vocal Monitoring Volume",
