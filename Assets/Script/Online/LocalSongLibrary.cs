@@ -43,12 +43,11 @@ namespace YARG.Online
         private static CancellationTokenSource _backfillCts;
 
         /// <summary>
-        /// Fired on the calling (background) thread each time a batch of gameplay hashes
-        /// finishes computing. <see cref="LobbyHubSession"/> subscribes to this only while a
-        /// lobby session is active, re-streaming the snapshot in response -- with no active
-        /// session, this simply has no listeners and nothing gets sent anywhere. Since this
-        /// fires off the main thread, subscribers that need the main thread must marshal
-        /// back themselves.
+        /// Fired on the calling (background) thread once a background gameplay-hash backfill
+        /// completes and discovers at least one new gameplay hash. <see cref="LobbyHubSession"/>
+        /// subscribes to this only while a lobby session is active, re-streaming the updated
+        /// snapshot in response. Since this fires off the main thread, subscribers that need
+        /// the main thread must marshal back themselves.
         /// </summary>
         public static event Action BackfillBatchCompleted;
 
@@ -113,6 +112,7 @@ namespace YARG.Online
                 b.Value[0].GetLastWriteTime().CompareTo(a.Value[0].GetLastWriteTime()));
 
             int sinceLastBatch = 0;
+            bool anyNewHashes = false;
 
             foreach (var kv in librarySnapshot)
             {
@@ -146,13 +146,13 @@ namespace YARG.Online
                 GameplayHashCache.Set(strict, gameplayHash.ToString());
                 SongContainer.RegisterGameplayHash(kv.Key, gameplayHash);
                 sinceLastBatch++;
+                anyNewHashes = true;
 
                 await UniTask.Delay(SongDelay, cancellationToken: ct);
 
                 if (sinceLastBatch >= BACKFILL_BATCH_SIZE)
                 {
                     GameplayHashCache.Flush();
-                    BackfillBatchCompleted?.Invoke();
                     sinceLastBatch = 0;
                 }
             }
@@ -160,6 +160,10 @@ namespace YARG.Online
             if (sinceLastBatch > 0)
             {
                 GameplayHashCache.Flush();
+            }
+
+            if (anyNewHashes)
+            {
                 BackfillBatchCompleted?.Invoke();
             }
         }
