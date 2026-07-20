@@ -183,11 +183,17 @@ namespace YARG.Menu.Online
             _previewSongSpeed = topSpeed;
 
             SongEntry songToLock = null;
-            if (!string.IsNullOrEmpty(topHash)
-                && SongContainer.SongsByHash.TryGetValue(HashWrapper.FromString(topHash), out var entries)
-                && entries.Count > 0)
+            if (!string.IsNullOrEmpty(topHash))
             {
-                songToLock = entries[0];
+                var topHashWrapper = HashWrapper.FromString(topHash);
+                if (SongContainer.SongsByHash.TryGetValue(topHashWrapper, out var entries) && entries.Count > 0)
+                {
+                    songToLock = entries[0];
+                }
+                else if (SongContainer.SongsByGameplayHash.TryGetValue(topHashWrapper, out var looseEntries) && looseEntries.Count > 0)
+                {
+                    songToLock = looseEntries[0];
+                }
             }
 
             MusicPlayer.SetLockedSong(songToLock, topSpeed);
@@ -594,6 +600,7 @@ namespace YARG.Menu.Online
             }
 
             MusicLibraryMenu.AllowedSongHashes = BuildPlayableSongSet(lobby);
+            MusicLibraryMenu.NotifyAllowedSongsChanged();
 
             MusicLibraryMenu.SongPickedCallback = OnSongPicked;
             MenuManager.Instance.SetActiveMenuExclusive(MenuManager.Menu.MusicLibrary);
@@ -620,12 +627,6 @@ namespace YARG.Menu.Online
                 }
             }
 
-            if (requiredInstruments.Count == 0)
-            {
-                // No instruments known yet -- fall back to the raw lobby library.
-                return lobby.LobbySongLibrary;
-            }
-
             // Pre-resolve GameModes. Fully qualified to avoid conflict with the contract enum.
             var memberGameModes = new YARG.Core.GameMode[requiredInstruments.Count];
             for (int i = 0; i < requiredInstruments.Count; i++)
@@ -633,15 +634,38 @@ namespace YARG.Menu.Online
                 memberGameModes[i] = requiredInstruments[i].ToNativeGameMode();
             }
 
-            var playable = new HashSet<HashWrapper>();
+            // Resolve the shared-library hash set down to one entry per underlying song,
+            // not one per matching hash -- a song shared via BOTH its strict and gameplay
+            // hash would otherwise appear twice in the picker. Strict always wins when both
+            // are present: it's checked first, and once a song is claimed by its strict
+            // hash, a later gameplay-hash entry for the same song is skipped rather than
+            // overwriting it.
+            var resolvedByEntry = new Dictionary<SongEntry, HashWrapper>();
             foreach (var hash in lobby.LobbySongLibrary)
             {
-                if (!SongContainer.SongsByHash.TryGetValue(hash, out var entries) || entries.Count == 0)
+                if (SongContainer.SongsByHash.TryGetValue(hash, out var strictEntries) && strictEntries.Count > 0)
                 {
-                    continue;
+                    resolvedByEntry[strictEntries[0]] = hash;
                 }
+                else if (SongContainer.SongsByGameplayHash.TryGetValue(hash, out var looseEntries)
+                    && looseEntries.Count > 0)
+                {
+                    if (!resolvedByEntry.ContainsKey(looseEntries[0]))
+                    {
+                        resolvedByEntry.Add(looseEntries[0], hash);
+                    }
+                }
+            }
 
-                var entry = entries[0];
+            if (requiredInstruments.Count == 0)
+            {
+                // No instruments known yet -- fall back to whichever hash resolved each song.
+                return new HashSet<HashWrapper>(resolvedByEntry.Values);
+            }
+
+            var playable = new HashSet<HashWrapper>();
+            foreach (var (entry, hash) in resolvedByEntry)
+            {
                 bool playableForAll = true;
                 for (int i = 0; i < memberGameModes.Length; i++)
                 {
@@ -667,6 +691,7 @@ namespace YARG.Menu.Online
                     playable.Add(hash);
                 }
             }
+            YargLogger.LogInfo($"Library: {resolvedByEntry.Count}, Playable with instrument: {playable.Count}");
             return playable;
         }
 
@@ -691,7 +716,27 @@ namespace YARG.Menu.Online
                 // PersistentState resets) so it travels with the queue entry and
                 // applies for everyone at game start.
                 float songSpeed = SongSpeedMenu.SongSpeedMultiplier;
-                await session.QueueSongAsync(hash, songSpeed, CancellationToken.None);
+
+                var hashToSend = hash;
+                if (GameplayHashCache.TryGet(hash.ToString(), out var gameplayHash))
+                {
+                    var gameplayHw = HashWrapper.FromString(gameplayHash);
+
+                    // Only use the gameplay hash if it already survived the lobby's
+                    // library intersection -- i.e. every member (including ones on
+                    // the unmodified client, which never pushes a gameplay hash)
+                    // has reported this exact value. Otherwise fall back to the
+                    // strict hash so their client can still resolve the song.
+                    if (session.CurrentLobby?.LobbySongLibrary.Contains(gameplayHw) == true)
+                    {
+                        hashToSend = gameplayHw;
+                    }
+                }
+
+                await session.QueueSongAsync(
+                    hashToSend,
+                    songSpeed,
+                    CancellationToken.None);
             }
             catch (Exception ex)
             {

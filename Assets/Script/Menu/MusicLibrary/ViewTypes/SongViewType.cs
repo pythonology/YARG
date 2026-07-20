@@ -158,7 +158,7 @@ namespace YARG.Menu.MusicLibrary
                 var cb = MusicLibraryMenu.SongPickedCallback;
                 MusicLibraryMenu.SongPickedCallback = null;
                 MusicLibraryMenu.ExitFromPickerConfirm();
-                cb?.Invoke(SongEntry.Hash);
+                cb?.Invoke(MusicLibraryMenu.ResolvePickerHash(SongEntry));
                 return;
             }
 

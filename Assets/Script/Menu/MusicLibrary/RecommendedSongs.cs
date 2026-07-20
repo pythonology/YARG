@@ -28,7 +28,7 @@ namespace YARG.Menu.MusicLibrary
                 allowedPool = new List<SongEntry>(allowedHashes.Count);
                 foreach (var s in SongContainer.Songs)
                 {
-                    if (allowedHashes.Contains(s.Hash))
+                    if (MusicLibraryMenu.IsAllowed(s))
                         allowedPool.Add(s);
                 }
                 targetCount = Math.Min(RECOMMEND_SONGS_COUNT, allowedPool.Count);
@@ -51,7 +51,7 @@ namespace YARG.Menu.MusicLibrary
             var mostPlayed = ScoreContainer.GetMostPlayedSongs(10);
             if (allowedHashes != null)
             {
-                mostPlayed.RemoveAll(s => !allowedHashes.Contains(s.Hash));
+                mostPlayed.RemoveAll(s => !MusicLibraryMenu.IsAllowed(s));
             }
             if (mostPlayed.Count > 0)
             {
@@ -79,7 +79,7 @@ namespace YARG.Menu.MusicLibrary
             {
                 var filtered = new List<SongEntry>(yargPool.Count);
                 foreach (var s in yargPool)
-                    if (allowedHashes.Contains(s.Hash)) filtered.Add(s);
+                    if (MusicLibraryMenu.IsAllowed(s)) filtered.Add(s);
                 yargPool = filtered.Count > 0 ? filtered : null;
             }
 
@@ -138,7 +138,7 @@ namespace YARG.Menu.MusicLibrary
                 {
                     var filtered = new List<SongEntry>(artistSongs.Count);
                     foreach (var s in artistSongs)
-                        if (allowedHashes.Contains(s.Hash)) filtered.Add(s);
+                        if (MusicLibraryMenu.IsAllowed(s)) filtered.Add(s);
                     artistPool = filtered;
                 }
 

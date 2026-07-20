@@ -115,10 +115,9 @@ namespace YARG.Menu.MusicLibrary
                 _sortedSongs = _searchField.Search(SettingsManager.Settings.LibrarySort);
                 // _sortedSongs = ApplyCollapsedSectionsForCurrentSort(_sortedSongs);
 
-                var allowed = AllowedSongHashes;
-                if (allowed != null)
+                if (AllowedSongHashes != null)
                 {
-                    _sortedSongs = ApplyFilterPredicate(_sortedSongs, s => allowed.Contains(s.Hash));
+                    _sortedSongs = ApplyFilterPredicate(_sortedSongs, IsAllowed);
                 }
 
                 _searchField.gameObject.SetActive(true);
@@ -131,7 +130,7 @@ namespace YARG.Menu.MusicLibrary
                 int count = 0;
                 foreach (var hash in SelectedPlaylist.SongHashes)
                 {
-                    if (AllowedSongHashes != null && !AllowedSongHashes.Contains(hash))
+                    if (!IsAllowed(hash))
                         continue;
 
                     // Get the first song with the specified hash

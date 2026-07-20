@@ -70,7 +70,12 @@ namespace YARG.Online
 
             var queued = lobby.SongQueue[0];
             var hash = HashWrapper.FromString(queued.SongHash);
-            if (!SongContainer.SongsByHash.TryGetValue(hash, out var songs) || songs.Count == 0)
+            bool found = SongContainer.SongsByHash.TryGetValue(hash, out var songs) && songs.Count > 0;
+            if (!found)
+            {
+                found = SongContainer.SongsByGameplayHash.TryGetValue(hash, out songs) && songs.Count > 0;
+            }
+            if (!found)
             {
                 DialogManager.Instance.ShowMessage("Could not start game",
                     "The queued song wasn't found in your local library.");

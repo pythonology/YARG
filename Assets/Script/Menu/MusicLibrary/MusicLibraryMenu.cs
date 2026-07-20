@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -77,6 +77,38 @@ namespace YARG.Menu.MusicLibrary
         /// Use <see cref="NotifyAllowedSongsChanged"/> to refresh the active menu after mutation.
         /// </summary>
         public static HashSet<HashWrapper>? AllowedSongHashes;
+
+        /// <summary>
+        /// Whether <paramref name="entry"/> is visible under the current allow-list.
+        /// Checks the strict hash first, then falls back to the cached gameplay hash
+        /// so songs that only match via <see cref="GameplayHashCache"/> still show up.
+        /// </summary>
+        public static bool IsAllowed(SongEntry entry) => AllowedSongHashes == null
+            || AllowedSongHashes.Contains(entry.Hash)
+            || (GameplayHashCache.TryGet(entry.Hash.ToString(), out var gameplayHash)
+                && AllowedSongHashes.Contains(HashWrapper.FromString(gameplayHash)));
+
+        /// <summary>
+        /// Hash-only overload of <see cref="IsAllowed(SongEntry)"/> for call sites that
+        /// only have a <see cref="HashWrapper"/> on hand (e.g. playlist entries).
+        /// </summary>
+        public static bool IsAllowed(HashWrapper hash) => AllowedSongHashes == null
+            || AllowedSongHashes.Contains(hash)
+            || (GameplayHashCache.TryGet(hash.ToString(), out var gameplayHash)
+                && AllowedSongHashes.Contains(HashWrapper.FromString(gameplayHash)));
+
+        public static HashWrapper ResolvePickerHash(SongEntry entry)
+        {
+            if (AllowedSongHashes == null || AllowedSongHashes.Contains(entry.Hash))
+                return entry.Hash;
+
+            if (GameplayHashCache.TryGet(entry.Hash.ToString(), out var gameplayHash))
+            {
+                var gw = HashWrapper.FromString(gameplayHash);
+                if (AllowedSongHashes.Contains(gw)) return gw;
+            }
+            return entry.Hash;
+        }
 #nullable disable
 
         private static MusicLibraryMenu _activeInstance;
@@ -229,6 +261,11 @@ namespace YARG.Menu.MusicLibrary
             }
             else if (_currentSong != null)
             {
+                UpdateSearch(true);
+            }
+            else
+            {
+                YargLogger.LogInfo("_currentSong is null, but update still");
                 UpdateSearch(true);
             }
 
@@ -392,7 +429,31 @@ namespace YARG.Menu.MusicLibrary
                 ? new NavigationScheme.Entry(MenuAction.Right, "Menu.MusicLibrary.MoveInPlaylist", MovePlaylistEntryDown)
                 : new NavigationScheme.Entry(MenuAction.Right, "Menu.MusicLibrary.SkipSection", GoToNextSection);
 
-            Navigator.Instance.PushScheme(new NavigationScheme(new()
+            // Give yellow the same behaviour as green: press to add to set, hold to start the set
+            NavigationScheme.Entry yellowEntry;
+
+            if (SettingsManager.Settings.EnablePlayAShow.Value)
+            {
+                yellowEntry = new NavigationScheme.Entry(
+                        MenuAction.Yellow,
+                        "Menu.MusicLibrary.HoldPlayShow",
+                        () => { }, // tap does nothing
+                        holdSeconds: GREEN_HOLD_SECONDS,
+                        onHoldHandler: EnterShowMode
+                    );
+            }
+            else
+            {
+                yellowEntry = new NavigationScheme.Entry(
+                        MenuAction.Yellow,
+                        "Menu.MusicLibrary.AddHoldStartSet",
+                        _ => AddToPlaylist(),
+                        holdSeconds: GREEN_HOLD_SECONDS,
+                        onHoldHandler: OnGreenHold // Use existing function
+                    );
+            }
+
+            var entries = new List<NavigationScheme.Entry>
             {
                 new NavigationScheme.Entry(MenuAction.Up, "Menu.Common.Up",
                     ctx =>
@@ -452,14 +513,13 @@ namespace YARG.Menu.MusicLibrary
                         hide: true
                     ),
                 new NavigationScheme.Entry(MenuAction.Red, "Menu.Common.Back", Back, hide: true),
-                setListNotEmpty ?
-                    new NavigationScheme.Entry(MenuAction.Yellow, "Menu.MusicLibrary.StartSet", StartSetlist) :
-                    new NavigationScheme.Entry(MenuAction.Yellow, "Menu.MusicLibrary.PlayShow", EnterShowMode),
+                yellowEntry,
                 new NavigationScheme.Entry(MenuAction.Blue, "Menu.MusicLibrary.Filters", OpenFilters),
                 new NavigationScheme.Entry(MenuAction.Orange, "Menu.MusicLibrary.MoreOptions",
                     OnOrangeHit, OnOrangeRelease),
-            }, false));
+            };
 
+            Navigator.Instance.PushScheme(new NavigationScheme(entries, false));
         }
 
         protected override void OnSelectedIndexChanged()
@@ -1050,7 +1110,8 @@ namespace YARG.Menu.MusicLibrary
 
             if (setListNotEmpty)
             {
-                // same as Blue: Start Setlist
+                // same as Yellow: Start Setlist
+                // Blue is now used for filters
                 StartSetlist();
             }
             else
@@ -1151,16 +1212,16 @@ namespace YARG.Menu.MusicLibrary
         private void RefreshForAllowedSongsChange()
         {
             // Capture BEFORE Refresh -- that rebuilds ViewList and may invalidate CurrentSelection.
-            var currentSongHash = (CurrentSelection as SongViewType)?.SongEntry.Hash;
+            var currentSongEntry = (CurrentSelection as SongViewType)?.SongEntry;
             var snapshot = CaptureSelectionSnapshot();
             Refresh();
 
             // Hash-based ContentStableId match inside RestoreSelectionSnapshot handles the happy
             // path automatically. When the previously-selected song is gone, we explicitly land
             // at index 0 instead of clamping to the old index near a different song.
-            bool selectedSongFilteredOut = currentSongHash.HasValue
+            bool selectedSongFilteredOut = currentSongEntry != null
                 && AllowedSongHashes != null
-                && !AllowedSongHashes.Contains(currentSongHash.Value);
+                && !IsAllowed(currentSongEntry);
 
             if (selectedSongFilteredOut && ViewList.Count > 0)
             {

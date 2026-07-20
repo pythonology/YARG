@@ -91,6 +91,7 @@ namespace YARG.Song
         private static SortedSongs _sortedSongs = new();
         private static SongEntry[] _songs = Array.Empty<SongEntry>();
         private static Dictionary<HashWrapper, List<SongEntry>> _songsByHash = new();
+        private static Dictionary<HashWrapper, List<SongEntry>> _songsByGameplayHash = new();
 
         private static SongCategory[] _sortTitles = Array.Empty<SongCategory>();
         private static SongCategory[] _sortArtists = Array.Empty<SongCategory>();
@@ -131,6 +132,39 @@ namespace YARG.Song
         public static int Count => _songs.Length;
         // public static IReadOnlyDictionary<HashWrapper, List<SongEntry>> SongsByHash => _songCache.Entries;
         public static IReadOnlyDictionary<HashWrapper, List<SongEntry>> SongsByHash => _songsByHash;
+
+        public static IReadOnlyDictionary<HashWrapper, List<SongEntry>> SongsByGameplayHash => _songsByGameplayHash;
+
+        /// <summary>
+        /// Called from <see cref="YARG.Online.LocalSongLibrary"/> as gameplay hashes get
+        /// computed/loaded from its persistent cache. Deliberately NOT populated inside
+        /// SetAllSongs -- unlike the strict hash, this one requires a full LoadChart() per
+        /// song and can't be built eagerly for the whole library on every scan/sort.
+        /// </summary>
+        public static void RegisterGameplayHash(HashWrapper strictHash, HashWrapper gameplayHash)
+        {
+            if (!_songsByHash.TryGetValue(strictHash, out var entries))
+            {
+                return;
+            }
+
+            if (_songsByGameplayHash.TryGetValue(gameplayHash, out var list))
+            {
+                foreach (var e in entries)
+                    if (!list.Contains(e)) list.Add(e);
+            }
+            else
+            {
+                _songsByGameplayHash.Add(gameplayHash, new List<SongEntry>(entries));
+            }
+        }
+
+        /// <summary>
+        /// Fired at the end of <see cref="RunRefresh"/>. <see cref="YARG.Online.LocalSongLibrary"/>
+        /// uses this to start backfilling gameplay hashes the moment a scan completes, rather
+        /// than waiting for a lobby to be joined.
+        /// </summary>
+        public static event Action OnSongsRefreshed;
         public static SongEntry[]                                       Songs       => _songs;
 
         public static SongEntry[] UnfilteredSongs => _songCache.Entries.Values.SelectMany(e => e).ToArray();
@@ -181,6 +215,7 @@ namespace YARG.Song
             }
             SongSorting.SortEntries(_songCache, _sortedSongs);
             FillContainers();
+            OnSongsRefreshed?.Invoke();
             stopwatch.Stop();
 
             YargLogger.LogFormatInfo("Scan time: {0}s", stopwatch.Elapsed.TotalSeconds);
@@ -632,6 +667,7 @@ namespace YARG.Song
             static SongEntry[] SetAllSongs(Dictionary<HashWrapper, List<SongEntry>> entries)
             {
                 _songsByHash.Clear();
+                _songsByGameplayHash.Clear();
 
                 int songCount = 0;
                 foreach (var node in entries)

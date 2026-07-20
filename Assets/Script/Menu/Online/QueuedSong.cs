@@ -55,7 +55,8 @@ namespace YARG.Menu.Online
 
             SetSongSpeed(songSpeed);
 
-            if (!SongContainer.SongsByHash.TryGetValue(hash, out var songs))
+            if (!SongContainer.SongsByHash.TryGetValue(hash, out var songs)
+                && !SongContainer.SongsByGameplayHash.TryGetValue(hash, out songs))
             {
                 _songName.text = hash.ToString();
                 _songBackground.sprite = _placeholder;

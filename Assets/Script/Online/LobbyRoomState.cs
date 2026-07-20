@@ -59,6 +59,12 @@ namespace YARG.Online
             }
         }
 
+        private static IEnumerable<HashWrapper> AllLocalHashes()
+        {
+            foreach (var h in SongContainer.SongsByHash.Keys) yield return h;
+            foreach (var h in SongContainer.SongsByGameplayHash.Keys) yield return h;
+        }
+
         public string GameServerEndpoint;
         public string GameToken;
         public DateTimeOffset GameTokenExpiresAt;
@@ -84,7 +90,7 @@ namespace YARG.Online
                 }
             }
 
-            var localHashes = SongContainer.SongsByHash.Keys;
+            var localHashes = AllLocalHashes();
             state.LobbySongLibrary = new HashSet<HashWrapper>();
             foreach (var hash in localHashes)
                 state.LobbySongLibrary.Add(hash);
@@ -123,7 +129,7 @@ namespace YARG.Online
                     removalSet.Add(HashWrapper.FromString(s.AsSpan()));
             }
 
-            var localHashes = SongContainer.SongsByHash.Keys;
+            var localHashes = AllLocalHashes();
             state.LobbySongLibrary = new HashSet<HashWrapper>();
             foreach (var hash in localHashes)
             {

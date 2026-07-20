@@ -52,10 +52,9 @@ namespace YARG.Menu.MusicLibrary
             // but the playlist view rendered 0 -- looked like favorites failed
             // to load. Falls through to "no filter" when AllowedSongHashes is
             // null (the non-lobby callers).
-            var allow = MusicLibraryMenu.AllowedSongHashes;
             foreach (var hash in playlist.SongHashes)
             {
-                if (allow != null && !allow.Contains(hash)) continue;
+                if (!MusicLibraryMenu.IsAllowed(hash)) continue;
                 if (SongContainer.SongsByHash.TryGetValue(hash, out var song))
                 {
                     songs[count++] = song[0];

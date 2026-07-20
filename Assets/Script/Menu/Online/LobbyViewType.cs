@@ -56,6 +56,10 @@ namespace YARG.Menu.Online
             {
                 return SongSources.SourceToIcon(entries[0].Source);
             }
+            if (SongContainer.SongsByGameplayHash.TryGetValue(hash, out var looseEntries) && looseEntries.Count > 0)
+            {
+                return SongSources.SourceToIcon(looseEntries[0].Source);
+            }
             return null;
         }
 
